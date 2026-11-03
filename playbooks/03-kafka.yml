@@ -11,9 +11,12 @@
     - name: Verificar SO
       ansible.builtin.assert:
         that: ansible_facts.os_family == 'Debian'
-    - name: Instalar Java 21 e tar
+    - name: Instalar dependencias do Kafka
       ansible.builtin.apt:
-        name: [openjdk-21-jre-headless, tar]
+        name:
+          - openjdk-21-jre-headless
+          - tar
+          - acl
         state: present
         update_cache: true
     - name: Criar usuario Kafka
