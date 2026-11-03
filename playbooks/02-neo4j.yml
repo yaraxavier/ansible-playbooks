@@ -1,40 +1,107 @@
+
 ---
-- name: Instalar Neo4j Community nativamente
+- name: Instalar e configurar Neo4j Community
   hosts: servicos
   become: true
+
+  vars_prompt:
+    - name: neo4j_password
+      prompt: "Digite a senha inicial do Neo4j"
+      private: true
+
   tasks:
-    - name: Validar Debian ou Ubuntu
+    - name: Validar sistema operacional
       ansible.builtin.assert:
-        that: ansible_facts.os_family == 'Debian'
-    - name: Instalar prerequisitos
+        that:
+          - ansible_facts.os_family == "Debian"
+        fail_msg: "Este playbook requer Debian ou Ubuntu."
+
+    - name: Instalar dependencias
       ansible.builtin.apt:
-        name: [ca-certificates, curl, gnupg, python3-debian]
+        name:
+          - ca-certificates
+          - curl
+          - gnupg
+          - python3-debian
         state: present
         update_cache: true
-    - name: Criar pasta de chaves
+
+    - name: Criar diretorio de chaves APT
       ansible.builtin.file:
         path: /etc/apt/keyrings
         state: directory
-        mode: '0755'
+        mode: "0755"
+
     - name: Baixar chave GPG do Neo4j
       ansible.builtin.get_url:
         url: https://debian.neo4j.com/neotechnology.gpg.key
         dest: /etc/apt/keyrings/neo4j.asc
-        mode: '0644'
-    - name: Adicionar repositorio oficial
+        mode: "0644"
+
+    - name: Adicionar repositorio oficial Neo4j
       ansible.builtin.apt_repository:
-        repo: 'deb [signed-by=/etc/apt/keyrings/neo4j.asc] https://debian.neo4j.com stable latest'
+        repo: "deb [signed-by=/etc/apt/keyrings/neo4j.asc] https://debian.neo4j.com stable latest"
         filename: neo4j
         state: present
         update_cache: true
+
     - name: Instalar Neo4j Community
       ansible.builtin.apt:
         name: neo4j
         state: present
-    - name: Iniciar servico Neo4j
+
+    - name: Verificar autenticacao existente
+      ansible.builtin.stat:
+        path: /var/lib/neo4j/data/dbms/auth.ini
+      register: neo4j_auth
+
+    - name: Consultar estado dos servicos
+      ansible.builtin.service_facts:
+
+    - name: Impedir senha inicial apos primeiro start
+      ansible.builtin.assert:
+        that:
+          - >
+            ansible_facts.services['neo4j.service'].state
+            != 'running'
+        fail_msg: >-
+          Neo4j ja esta em execucao sem auth.ini.
+          Verifique a inicializacao antes de definir
+          uma senha inicial.
+      when: not neo4j_auth.stat.exists
+
+    - name: Validar senha de primeira instalacao
+      ansible.builtin.assert:
+        that:
+          - neo4j_password | length >= 8
+        fail_msg: "Use uma senha de pelo menos 8 caracteres."
+      when: not neo4j_auth.stat.exists
+      no_log: true
+
+    - name: Definir senha inicial do Neo4j
+      ansible.builtin.command:
+        argv:
+          - neo4j-admin
+          - dbms
+          - set-initial-password
+          - "{{ neo4j_password }}"
+      become_user: neo4j
+      when: not neo4j_auth.stat.exists
+      no_log: true
+
+    - name: Habilitar e iniciar Neo4j
       ansible.builtin.systemd_service:
         name: neo4j
         state: started
         enabled: true
-# IMPORTANTE: configurar a senha inicial com neo4j-admin ANTES do primeiro start
-# em um provisionamento real; nunca registrar a senha no Git.
+
+    - name: Aguardar porta Bolt do Neo4j
+      ansible.builtin.wait_for:
+        host: "127.0.0.1"
+        port: 7687
+        delay: 3
+        timeout: 120
+
+    - name: Confirmar inicializacao
+      ansible.builtin.debug:
+        msg: "Neo4j instalado e porta Bolt disponivel."
