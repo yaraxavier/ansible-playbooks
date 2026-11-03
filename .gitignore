@@ -1,0 +1,7 @@
+*.retry
+*.log
+.env
+*.pem
+*.key
+.vault_pass*
+__pycache__/

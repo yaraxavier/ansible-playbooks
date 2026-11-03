@@ -1,0 +1,102 @@
+---
+- name: Instalar Qdrant nativamente
+  hosts: servicos
+  become: true
+  vars:
+    qdrant_version: 'v1.20.0'
+    qdrant_arch: 'x86_64'
+    qdrant_url: 'https://github.com/qdrant/qdrant/releases/download/{{ qdrant_version }}/qdrant-{{ qdrant_arch }}-unknown-linux-gnu.tar.gz'
+  tasks:
+    - name: Validar sistema operacional e arquitetura
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.os_family == 'Debian'
+          - ansible_facts.architecture == 'x86_64'
+        fail_msg: 'Este playbook foi preparado para Debian/Ubuntu x86_64.'
+    - name: Criar usuario de servico
+      ansible.builtin.user:
+        name: qdrant
+        system: true
+        shell: /usr/sbin/nologin
+        home: /var/lib/qdrant
+        create_home: false
+    - name: Criar diretorios
+      ansible.builtin.file:
+        path: '{{ item.path }}'
+        state: directory
+        owner: '{{ item.owner }}'
+        group: '{{ item.group }}'
+        mode: '{{ item.mode }}'
+      loop:
+        - {path: /opt/qdrant, owner: root, group: root, mode: '0755'}
+        - {path: /etc/qdrant, owner: root, group: qdrant, mode: '0750'}
+        - {path: /var/lib/qdrant, owner: qdrant, group: qdrant, mode: '0750'}
+        - {path: /var/lib/qdrant/storage, owner: qdrant, group: qdrant, mode: '0750'}
+    - name: Baixar distribuicao do Qdrant
+      ansible.builtin.get_url:
+        url: '{{ qdrant_url }}'
+        dest: '/opt/qdrant/qdrant-{{ qdrant_version }}.tar.gz'
+        mode: '0644'
+      register: qdrant_download
+    - name: Extrair binario
+      ansible.builtin.unarchive:
+        src: '/opt/qdrant/qdrant-{{ qdrant_version }}.tar.gz'
+        dest: /opt/qdrant
+        remote_src: true
+        creates: /opt/qdrant/qdrant
+      notify: Reiniciar Qdrant
+    - name: Instalar binario
+      ansible.builtin.copy:
+        src: /opt/qdrant/qdrant
+        dest: /usr/local/bin/qdrant
+        remote_src: true
+        owner: root
+        group: root
+        mode: '0755'
+      notify: Reiniciar Qdrant
+    - name: Configurar Qdrant para localhost (laboratorio)
+      ansible.builtin.copy:
+        dest: /etc/qdrant/config.yaml
+        owner: root
+        group: qdrant
+        mode: '0640'
+        content: |
+          storage:
+            storage_path: /var/lib/qdrant/storage
+          service:
+            host: 127.0.0.1
+            http_port: 6333
+            grpc_port: 6334
+      notify: Reiniciar Qdrant
+    - name: Registrar servico systemd
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/qdrant.service
+        mode: '0644'
+        content: |
+          [Unit]
+          Description=Qdrant vector database
+          After=network.target
+          [Service]
+          Type=simple
+          User=qdrant
+          Group=qdrant
+          WorkingDirectory=/var/lib/qdrant
+          ExecStart=/usr/local/bin/qdrant --config-path /etc/qdrant/config.yaml
+          Restart=on-failure
+          RestartSec=5
+          NoNewPrivileges=true
+          [Install]
+          WantedBy=multi-user.target
+      notify: Reiniciar Qdrant
+    - name: Habilitar e iniciar Qdrant
+      ansible.builtin.systemd_service:
+        name: qdrant
+        enabled: true
+        state: started
+        daemon_reload: true
+  handlers:
+    - name: Reiniciar Qdrant
+      ansible.builtin.systemd_service:
+        name: qdrant
+        state: restarted
+        daemon_reload: true

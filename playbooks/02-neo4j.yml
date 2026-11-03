@@ -1,0 +1,40 @@
+---
+- name: Instalar Neo4j Community nativamente
+  hosts: servicos
+  become: true
+  tasks:
+    - name: Validar Debian ou Ubuntu
+      ansible.builtin.assert:
+        that: ansible_facts.os_family == 'Debian'
+    - name: Instalar prerequisitos
+      ansible.builtin.apt:
+        name: [ca-certificates, curl, gnupg, python3-debian]
+        state: present
+        update_cache: true
+    - name: Criar pasta de chaves
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+    - name: Baixar chave GPG do Neo4j
+      ansible.builtin.get_url:
+        url: https://debian.neo4j.com/neotechnology.gpg.key
+        dest: /etc/apt/keyrings/neo4j.asc
+        mode: '0644'
+    - name: Adicionar repositorio oficial
+      ansible.builtin.apt_repository:
+        repo: 'deb [signed-by=/etc/apt/keyrings/neo4j.asc] https://debian.neo4j.com stable latest'
+        filename: neo4j
+        state: present
+        update_cache: true
+    - name: Instalar Neo4j Community
+      ansible.builtin.apt:
+        name: neo4j
+        state: present
+    - name: Iniciar servico Neo4j
+      ansible.builtin.systemd_service:
+        name: neo4j
+        state: started
+        enabled: true
+# IMPORTANTE: configurar a senha inicial com neo4j-admin ANTES do primeiro start
+# em um provisionamento real; nunca registrar a senha no Git.
