@@ -37,6 +37,7 @@
     - name: Atualizar indice de pacotes
       ansible.builtin.apt:
         update_cache: true
+        cache_valid_time: 3600
     - name: Instalar pacotes Erlang recomendados e RabbitMQ
       ansible.builtin.apt:
         name:
