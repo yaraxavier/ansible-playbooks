@@ -5,3 +5,7 @@
 *.key
 .vault_pass*
 __pycache__/
+# Inventários e credenciais locais
+inventory/hosts.ini
+*.pem
+*.key

@@ -58,8 +58,35 @@ curl --fail http://127.0.0.1:6333/healthz
 
 ## Status de validação
 
-Código de referência preparado para revisão. **Nenhuma instalação real em VM foi executada neste ambiente.** É necessário executar `--syntax-check` e testes de integração no ambiente-alvo antes de declarar sucesso.
+## Status de validação
 
+Os quatro playbooks foram executados e testados em uma instância AWS EC2 com Ubuntu Server 24.04 LTS, arquitetura x86_64, 8 GiB de RAM e 20 GiB de armazenamento EBS.
+
+A implantação foi realizada diretamente no sistema operacional, utilizando Ansible por SSH, sem Docker.
+
+### Resultados dos testes
+
+| Serviço | Validação funcional | Idempotência |
+|---|---|---|
+| Qdrant | Serviço systemd ativo e API HTTP respondendo | `changed=0`, `failed=0` |
+| Neo4j | Autenticação e consulta Cypher executadas | `changed=0`, `failed=0` |
+| Apache Kafka | Criação de tópico, publicação e consumo de mensagem | `changed=0`, `failed=0` |
+| RabbitMQ | Broker ativo, criação de fila, publicação e consumo de mensagem | `changed=0`, `failed=0` |
+
+### Limitações dos testes
+
+- Os testes foram realizados em uma EC2 previamente configurada, com os serviços instalados individualmente.
+- Ainda não foi validada a instalação completa de todos os playbooks em VMs limpas.
+- O Neo4j teve sua senha inicial configurada manualmente antes da execução da versão automatizada.
+- O Kafka apresentou código de saída 143 durante o desligamento. O serviço concluiu sua rotina de encerramento, mas o systemd registrou estado `failed`. A unit ainda precisa ser aprimorada.
+- O plugin de gerenciamento do RabbitMQ foi habilitado manualmente durante o laboratório e não faz parte do playbook atual.
+- A execução em ambientes não AWS, como KVM/QEMU ou Proxmox, ainda não foi validada.
+
+### Situação atual
+
+**Prova de conceito funcional, com testes de idempotência aprovados no ambiente utilizado.**
+
+A reprodução integral em uma VM limpa e a revisão de segurança são necessárias antes de considerar os playbooks homologados para produção.
 ## Documentação oficial
 
 - Qdrant: https://qdrant.tech/documentation/installation/
